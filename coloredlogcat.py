@@ -30,6 +30,11 @@ HEIGHT, WIDTH = struct.unpack('hh',data)
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
+# list of logtags to highlight
+HIGHLIGHT = [
+    "ActivityManager"
+]
+
 def format(fg=None, bg=None, bright=False, bold=False, dim=False, reset=False):
     # manually derived from http://en.wikipedia.org/wiki/ANSI_escape_code#Codes
     codes = []
@@ -72,8 +77,9 @@ def allocate_color(tag):
     if not tag in KNOWN_TAGS:
         KNOWN_TAGS[tag] = LAST_USED[0]
     color = KNOWN_TAGS[tag]
-    LAST_USED.remove(color)
-    LAST_USED.append(color)
+    if color in LAST_USED:
+        LAST_USED.remove(color)
+        LAST_USED.append(color)
     return color
 
 
@@ -92,9 +98,26 @@ TAGTYPES = {
     "I": "%s%s%s " % (format(fg=BLACK, bg=GREEN), "I".center(TAGTYPE_WIDTH), format(reset=True)),
     "W": "%s%s%s " % (format(fg=BLACK, bg=YELLOW), "W".center(TAGTYPE_WIDTH), format(reset=True)),
     "E": "%s%s%s " % (format(fg=BLACK, bg=RED), "E".center(TAGTYPE_WIDTH), format(reset=True)),
+    "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(TAGTYPE_WIDTH), format(reset=True)),
 }
 
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
+retime = re.compile("(?:(\d+)s)?(\d+)ms")
+
+def millis_color(match):
+    # TODO: handle "19s214ms" formatting
+    sec, millis = match.groups()
+    millis = int(millis)
+    if sec is not None:
+        sec = int(sec)
+        millis += sec * 1000
+    style = format(reset=True)
+    if millis > 640: style = format(fg=RED, bold=True)
+    elif millis > 320: style = format(fg=RED)
+    elif millis > 160: style = format(fg=YELLOW, bold=True)
+    elif millis > 32: style = format(fg=YELLOW)
+    elif millis > 16: style = format(fg=CYAN)
+    return "%s%s%s" % (style, match.group(0), format(reset=True))
 
 # to pick up -d or -e
 adb_args = ' '.join(sys.argv[1:])
@@ -111,6 +134,8 @@ while True:
     except KeyboardInterrupt:
         break
 
+    line = line.expandtabs(4)
+
     match = retag.match(line)
     if not match is None:
         tagtype, tag, owner, message = match.groups()
@@ -123,13 +148,20 @@ while True:
 
         # right-align tag title and allocate color if needed
         tag = tag.strip()
-        color = allocate_color(tag)
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s %s" % (format(fg=color, dim=False), tag, format(reset=True)))
+        if tag in HIGHLIGHT:
+            tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+            linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
+        else:
+            color = allocate_color(tag)
+            tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+            linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
 
         # write out tagtype colored edge
         if not tagtype in TAGTYPES: continue
         linebuf.write(TAGTYPES[tagtype])
+
+        # color any high-millis operations
+        message = retime.sub(millis_color, message)
 
         # insert line wrapping as needed
         message = indent_wrap(message, HEADER_SIZE, WIDTH)
@@ -143,16 +175,5 @@ while True:
         line = linebuf.getvalue()
 
     print line
-    #if len(line) == 0: break
-
-
-
-
-
-
-
-
-
-
-
+    if len(line) == 0: break
 
