@@ -20,20 +20,33 @@
 # written by jeff sharkey, http://jsharkey.org/
 # piping detection and popen() added by other android team members
 
-
 import os, sys, re, StringIO
 import fcntl, termios, struct
+
+# List of tags to highlight (inverted)
+HIGHLIGHT = [
+    "ActivityManager",
+    "MyApp",
+]
+
+# List of tags to ignore completely
+IGNORED = [
+    "SpammyApp"
+]
+
+# Width of various columns; set to -1 to hide
+USER_WIDTH = 3
+PROCESS_WIDTH = 8
+TAG_WIDTH = 20
+PRIORITY_WIDTH = 3
+
+HEADER_SIZE = USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
 
 # unpack the current terminal width/height
 data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
 HEIGHT, WIDTH = struct.unpack('hh',data)
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
-
-# list of logtags to highlight
-HIGHLIGHT = [
-    "ActivityManager"
-]
 
 def format(fg=None, bg=None, bright=False, bold=False, dim=False, reset=False):
     # manually derived from http://en.wikipedia.org/wiki/ANSI_escape_code#Codes
@@ -62,7 +75,7 @@ def indent_wrap(message, indent=0, width=80):
         current = next
     return messagebuf.getvalue()
 
-
+USER_COLORS = [BLUE,YELLOW,RED,GREEN,MAGENTA,CYAN]
 LAST_USED = [RED,GREEN,YELLOW,BLUE,MAGENTA,CYAN,WHITE]
 KNOWN_TAGS = {
     "dalvikvm": BLUE,
@@ -70,6 +83,12 @@ KNOWN_TAGS = {
     "ActivityManager": CYAN,
     "ActivityThread": CYAN,
 }
+
+# map from known pid to uid
+KNOWN_PIDS = {}
+
+def get_user_id(uid):
+    return uid / 100000
 
 def allocate_color(tag):
     # this will allocate a unique format for the given tag
@@ -82,27 +101,18 @@ def allocate_color(tag):
         LAST_USED.append(color)
     return color
 
-
-RULES = {
-    #re.compile(r"([\w\.@]+)=([\w\.@]+)"): r"%s\1%s=%s\2%s" % (format(fg=BLUE), format(fg=GREEN), format(fg=BLUE), format(reset=True)),
-}
-
-TAGTYPE_WIDTH = 3
-TAG_WIDTH = 20
-PROCESS_WIDTH = 8 # 8 or -1
-HEADER_SIZE = TAGTYPE_WIDTH + 1 + TAG_WIDTH + 1 + PROCESS_WIDTH + 1
-
-TAGTYPES = {
-    "V": "%s%s%s " % (format(fg=WHITE, bg=BLACK), "V".center(TAGTYPE_WIDTH), format(reset=True)),
-    "D": "%s%s%s " % (format(fg=BLACK, bg=BLUE), "D".center(TAGTYPE_WIDTH), format(reset=True)),
-    "I": "%s%s%s " % (format(fg=BLACK, bg=GREEN), "I".center(TAGTYPE_WIDTH), format(reset=True)),
-    "W": "%s%s%s " % (format(fg=BLACK, bg=YELLOW), "W".center(TAGTYPE_WIDTH), format(reset=True)),
-    "E": "%s%s%s " % (format(fg=BLACK, bg=RED), "E".center(TAGTYPE_WIDTH), format(reset=True)),
-    "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(TAGTYPE_WIDTH), format(reset=True)),
+PRIORITIES = {
+    "V": "%s%s%s " % (format(fg=WHITE, bg=BLACK), "V".center(PRIORITY_WIDTH), format(reset=True)),
+    "D": "%s%s%s " % (format(fg=BLACK, bg=BLUE), "D".center(PRIORITY_WIDTH), format(reset=True)),
+    "I": "%s%s%s " % (format(fg=BLACK, bg=GREEN), "I".center(PRIORITY_WIDTH), format(reset=True)),
+    "W": "%s%s%s " % (format(fg=BLACK, bg=YELLOW), "W".center(PRIORITY_WIDTH), format(reset=True)),
+    "E": "%s%s%s " % (format(fg=BLACK, bg=RED), "E".center(PRIORITY_WIDTH), format(reset=True)),
+    "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(PRIORITY_WIDTH), format(reset=True)),
 }
 
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
 retime = re.compile("(?:(\d+)s)?(\d+)ms")
+reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
 
 def millis_color(match):
     # TODO: handle "19s214ms" formatting
@@ -135,45 +145,62 @@ while True:
         break
 
     line = line.expandtabs(4)
-
-    match = retag.match(line)
-    if not match is None:
-        tagtype, tag, owner, message = match.groups()
-        linebuf = StringIO.StringIO()
-
-        # center process info
-        if PROCESS_WIDTH > 0:
-            owner = owner.strip().center(PROCESS_WIDTH)
-            linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), owner, format(reset=True)))
-
-        # right-align tag title and allocate color if needed
-        tag = tag.strip()
-        if tag in HIGHLIGHT:
-            tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-            linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
-        else:
-            color = allocate_color(tag)
-            tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-            linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
-
-        # write out tagtype colored edge
-        if not tagtype in TAGTYPES: continue
-        linebuf.write(TAGTYPES[tagtype])
-
-        # color any high-millis operations
-        message = retime.sub(millis_color, message)
-
-        # insert line wrapping as needed
-        message = indent_wrap(message, HEADER_SIZE, WIDTH)
-
-        # format tag message using rules
-        for matcher in RULES:
-            replace = RULES[matcher]
-            message = matcher.sub(replace, message)
-
-        linebuf.write(message)
-        line = linebuf.getvalue()
-
-    print line
     if len(line) == 0: break
 
+    # watch for process-to-user mappings
+    match = reproc.search(line)
+    if match:
+        KNOWN_PIDS[int(match.group(1))] = int(match.group(2))
+
+    match = retag.match(line)
+    if not match:
+        print line
+        continue
+
+    priority, tag, process, message = match.groups()
+    linebuf = StringIO.StringIO()
+
+    tag = tag.strip()
+    if tag in IGNORED: continue
+
+    # center user info
+    if USER_WIDTH > 0:
+        pid = int(process)
+        if pid in KNOWN_PIDS and KNOWN_PIDS[pid] >= 10000:
+            user = get_user_id(KNOWN_PIDS[pid])
+            color = USER_COLORS[user % len(USER_COLORS)]
+            user = str(user).center(USER_WIDTH)
+            linebuf.write("%s%s%s " % (format(fg=BLACK, bg=color, bright=False), user, format(reset=True)))
+        else:
+            linebuf.write(" " * (USER_WIDTH + 1))
+
+    # center process info
+    if PROCESS_WIDTH > 0:
+        process = process.strip().center(PROCESS_WIDTH)
+        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), process, format(reset=True)))
+
+    # right-align tag title and allocate color if needed
+    tag = tag.strip()
+    if tag in HIGHLIGHT:
+        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
+    else:
+        color = allocate_color(tag)
+        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+        linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
+
+    # write out tagtype colored edge
+    if not priority in PRIORITIES:
+        print line
+        continue
+
+    linebuf.write(PRIORITIES[priority])
+
+    # color any high-millis operations
+    message = retime.sub(millis_color, message)
+
+    # insert line wrapping as needed
+    message = indent_wrap(message, HEADER_SIZE, WIDTH)
+
+    linebuf.write(message)
+    print linebuf.getvalue()
