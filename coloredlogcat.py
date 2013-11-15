@@ -79,6 +79,7 @@ USER_COLORS = [BLUE,YELLOW,RED,GREEN,MAGENTA,CYAN]
 LAST_USED = [RED,GREEN,YELLOW,BLUE,MAGENTA,CYAN,WHITE]
 KNOWN_TAGS = {
     "dalvikvm": BLUE,
+    "art": BLUE,
     "Process": BLUE,
     "ActivityManager": CYAN,
     "ActivityThread": CYAN,
@@ -111,13 +112,13 @@ PRIORITIES = {
 }
 
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
-retime = re.compile("(?:(\d+)s)?(\d+)ms")
+retime = re.compile("(?:(\d+)s)?([\d.]+)ms")
 reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
 
 def millis_color(match):
     # TODO: handle "19s214ms" formatting
     sec, millis = match.groups()
-    millis = int(millis)
+    millis = float(millis)
     if sec is not None:
         sec = int(sec)
         millis += sec * 1000
