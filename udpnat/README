@@ -1,0 +1,21 @@
+
+udpnat: tool for probing UDP NAT timeouts
+Written by jsharkey
+
+When a client sends UDP packets from behind a NAT, the NAT creates a temporary
+port mapping to allow the external server to send reply packets.  If no UDP
+packets are seen after a given timeout, the port is reclaimed by the NAT, and
+the server can no longer reach the client.
+
+This timeout becomes important on mobile devices, where waking up the radio
+has battery impact.  (If you send NAT keepalive packets too frequently, your
+battery drains quickly; if too sparsely, the NAT mapping will timeout.)
+
+NAT devices can have different timeouts, and you may not have access to their
+configuration details.  This tool is designed to help you empirically derive
+that timeout.  It operates in a "master" or "slave" mode.  The master is
+responsible for sending a ping request and then sleeping.  The slave passively
+replies to any incoming pings.
+
+This tool can be useful for setting the natt_keepalive timer variable in
+racoon.conf when running an IPsec VPN in NAT-Traversal (NAT-T) mode.
