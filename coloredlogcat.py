@@ -42,9 +42,13 @@ PRIORITY_WIDTH = 3
 
 HEADER_SIZE = USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
 
+# enable interactive mode only if we're printing to a tty, not if we're piping to someone
+interactive = sys.stdout.isatty()
+
 # unpack the current terminal width/height
-data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
-HEIGHT, WIDTH = struct.unpack('hh',data)
+if interactive:
+    data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
+    HEIGHT, WIDTH = struct.unpack('hh',data)
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
@@ -143,6 +147,7 @@ while True:
     try:
         line = input.readline()
     except KeyboardInterrupt:
+        sys.stdout.flush()
         break
 
     line = line.expandtabs(4)
@@ -201,7 +206,8 @@ while True:
     message = retime.sub(millis_color, message)
 
     # insert line wrapping as needed
-    message = indent_wrap(message, HEADER_SIZE, WIDTH)
+    if interactive:
+        message = indent_wrap(message, HEADER_SIZE, WIDTH)
 
     linebuf.write(message)
     print linebuf.getvalue()
