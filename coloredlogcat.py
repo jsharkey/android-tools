@@ -36,8 +36,8 @@ IGNORED = [
 
 # Width of various columns; set to -1 to hide
 USER_WIDTH = 3
-PROCESS_WIDTH = 8
-TAG_WIDTH = 20
+PROCESS_WIDTH = 5
+TAG_WIDTH = 24
 PRIORITY_WIDTH = 3
 
 HEADER_SIZE = USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
@@ -111,7 +111,7 @@ PRIORITIES = {
     "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(PRIORITY_WIDTH), format(reset=True)),
 }
 
-retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
+retag = re.compile("^([VDIWEF])\/(.+)\(\s*(\d{1,5})\): (.+)$")
 retime = re.compile("(?:(\d+)s)?([\d.]+)ms")
 reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
 
@@ -175,13 +175,12 @@ while True:
         else:
             linebuf.write(" " * (USER_WIDTH + 1))
 
-    # center process info
+    # right-align process info
     if PROCESS_WIDTH > 0:
-        process = process.strip().center(PROCESS_WIDTH)
+        process = process.rjust(PROCESS_WIDTH)
         linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), process, format(reset=True)))
 
     # right-align tag title and allocate color if needed
-    tag = tag.strip()
     if tag in HIGHLIGHT:
         tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
         linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
