@@ -182,7 +182,10 @@ while True:
 
     # right-align tag title and allocate color if needed
     tag = tag.strip()
-    if tag in HIGHLIGHT:
+    if "avc: denied" in message:
+        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+        linebuf.write("%s%s%s " % (format(fg=WHITE, bg=RED, dim=False), tag, format(reset=True)))
+    elif tag in HIGHLIGHT:
         tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
         linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
     else:
