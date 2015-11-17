@@ -112,7 +112,7 @@ PRIORITIES = {
 }
 
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
-retime = re.compile("(?:(\d+)s)?([\d.]+)ms")
+retime = re.compile("(?:(\d+)s)?([\d.]+)\dms")
 reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
 
 def millis_color(match):
@@ -135,7 +135,7 @@ adb_args = ' '.join(sys.argv[1:])
 
 # if someone is piping in to us, use stdin as input.  if not, invoke adb logcat
 if os.isatty(sys.stdin.fileno()):
-    input = os.popen("adb %s logcat" % adb_args)
+    input = os.popen("adb %s logcat -v brief" % adb_args)
 else:
     input = sys.stdin
 
