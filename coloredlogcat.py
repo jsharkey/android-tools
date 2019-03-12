@@ -36,12 +36,13 @@ IGNORED = [
 
 # Width of various columns; set to -1 to hide
 TIME_WIDTH = 18 
+PPID_WIDTH = 7
 USER_WIDTH = 3
-PROCESS_WIDTH = 8
+PROCESS_WIDTH = 7
 TAG_WIDTH = 20
 PRIORITY_WIDTH = 3
 
-HEADER_SIZE = TIME_WIDTH + USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
+HEADER_SIZE = TIME_WIDTH + PPID_WIDTH + USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 6
 
 # unpack the current terminal width/height
 data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
@@ -168,7 +169,7 @@ while True:
 
     # time
     if TIME_WIDTH > 0:
-        linebuf.write(time)
+        linebuf.write("%s%s%s " % (format(fg=GREEN, bg=BLACK, bright=False), time, format(reset=True)))
 
     # center user info
     if USER_WIDTH > 0:
@@ -180,6 +181,11 @@ while True:
             linebuf.write("%s%s%s " % (format(fg=BLACK, bg=color, bright=False), user, format(reset=True)))
         else:
             linebuf.write(" " * (USER_WIDTH + 1))
+
+    # ppid
+    if PPID_WIDTH > 0:
+        ppid = ppid.strip().center(PPID_WIDTH)
+        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), ppid, format(reset=True)))
 
     # center process info
     if PROCESS_WIDTH > 0:
