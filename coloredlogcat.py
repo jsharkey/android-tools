@@ -35,12 +35,13 @@ IGNORED = [
 ]
 
 # Width of various columns; set to -1 to hide
+TIME_WIDTH = 18 
 USER_WIDTH = 3
 PROCESS_WIDTH = 8
 TAG_WIDTH = 20
 PRIORITY_WIDTH = 3
 
-HEADER_SIZE = USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
+HEADER_SIZE = TIME_WIDTH + USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
 
 # unpack the current terminal width/height
 data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
@@ -111,6 +112,7 @@ PRIORITIES = {
     "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(PRIORITY_WIDTH), format(reset=True)),
 }
 
+redetail = re.compile("^([0-9]+-[0-9]+ [0-9\:\.]+)\s+([0-9]+)\s+([0-9]+) ([A-Z]) ([^\:]+)\: (.*)$")
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
 retime = re.compile("(?:(\d+)s)?([\d.]+)\dms")
 reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
@@ -135,7 +137,7 @@ adb_args = ' '.join(sys.argv[1:])
 
 # if someone is piping in to us, use stdin as input.  if not, invoke adb logcat
 if os.isatty(sys.stdin.fileno()):
-    input = os.popen("adb %s logcat -v brief" % adb_args)
+    input = os.popen("adb %s logcat" % adb_args)
 else:
     input = sys.stdin
 
@@ -153,16 +155,20 @@ while True:
     if match:
         KNOWN_PIDS[int(match.group(1))] = int(match.group(2))
 
-    match = retag.match(line)
+    match = redetail.match(line)
     if not match:
         print line
         continue
 
-    priority, tag, process, message = match.groups()
+    time, ppid, process, priority, tag, message = match.groups()
     linebuf = StringIO.StringIO()
 
     tag = tag.strip()
     if tag in IGNORED: continue
+
+    # time
+    if TIME_WIDTH > 0:
+        linebuf.write(time)
 
     # center user info
     if USER_WIDTH > 0:
