@@ -113,7 +113,7 @@ PRIORITIES = {
     "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(PRIORITY_WIDTH), format(reset=True)),
 }
 
-redetail = re.compile("^([0-9]+-[0-9]+ [0-9\:\.]+)\s+([0-9]+)\s+([0-9]+) ([A-Z]) ([^\:]+)\: (.*)$")
+redetail = re.compile("^([0-9]+-[0-9]+ [0-9\:\.]+)\s+([0-9]+)\s+([0-9]+) ([\sVDIWEF\s]) ([\S]*)\s*\: (.*)$")
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
 retime = re.compile("(?:(\d+)s)?([\d.]+)\dms")
 reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
@@ -143,6 +143,9 @@ else:
     input = sys.stdin
 
 while True:
+    line_header_size = HEADER_SIZE
+    line_tag_width = TAG_WIDTH
+
     try:
         line = input.readline()
     except KeyboardInterrupt:
@@ -162,6 +165,9 @@ while True:
         continue
 
     time, ppid, process, priority, tag, message = match.groups()
+    if (len(tag) > line_tag_width):
+        line_tag_width = len(tag)
+        line_header_size = TIME_WIDTH + PPID_WIDTH + USER_WIDTH + PROCESS_WIDTH + line_tag_width + PRIORITY_WIDTH + 6
     linebuf = StringIO.StringIO()
 
     tag = tag.strip()
@@ -195,14 +201,14 @@ while True:
     # right-align tag title and allocate color if needed
     tag = tag.strip()
     if "avc: denied" in message:
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+        tag = tag[-line_tag_width:].rjust(line_tag_width)
         linebuf.write("%s%s%s " % (format(fg=WHITE, bg=RED, dim=False), tag, format(reset=True)))
     elif tag in HIGHLIGHT:
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+        tag = tag[-line_tag_width:].rjust(line_tag_width)
         linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
     else:
         color = allocate_color(tag)
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
+        tag = tag[-line_tag_width:].rjust(line_tag_width)
         linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
 
     # write out tagtype colored edge
@@ -216,7 +222,7 @@ while True:
     message = retime.sub(millis_color, message)
 
     # insert line wrapping as needed
-    message = indent_wrap(message, HEADER_SIZE, WIDTH)
+    message = indent_wrap(message, line_header_size, WIDTH)
 
     linebuf.write(message)
     print linebuf.getvalue()
