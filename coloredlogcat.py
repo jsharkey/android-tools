@@ -37,7 +37,7 @@ IGNORED = [
 # Width of various columns; set to -1 to hide
 TIME_WIDTH = 18 
 PPID_WIDTH = 7
-USER_WIDTH = 3
+USER_WIDTH = 0
 PROCESS_WIDTH = 7
 TAG_WIDTH = 20
 PRIORITY_WIDTH = 3
@@ -78,7 +78,7 @@ def indent_wrap(message, indent=0, width=80):
     return messagebuf.getvalue()
 
 USER_COLORS = [BLUE,YELLOW,RED,GREEN,MAGENTA,CYAN]
-LAST_USED = [RED,GREEN,YELLOW,BLUE,MAGENTA,CYAN,WHITE]
+LAST_USED = [RED,GREEN,YELLOW,MAGENTA,CYAN,WHITE]
 KNOWN_TAGS = {
     "dalvikvm": BLUE,
     "art": BLUE,
@@ -105,7 +105,7 @@ def allocate_color(tag):
     return color
 
 PRIORITIES = {
-    "V": "%s%s%s " % (format(fg=WHITE, bg=BLACK), "V".center(PRIORITY_WIDTH), format(reset=True)),
+    "V": "%s%s%s " % (format(fg=BLACK, bg=WHITE), "V".center(PRIORITY_WIDTH), format(reset=True)),
     "D": "%s%s%s " % (format(fg=BLACK, bg=BLUE), "D".center(PRIORITY_WIDTH), format(reset=True)),
     "I": "%s%s%s " % (format(fg=BLACK, bg=GREEN), "I".center(PRIORITY_WIDTH), format(reset=True)),
     "W": "%s%s%s " % (format(fg=BLACK, bg=YELLOW), "W".center(PRIORITY_WIDTH), format(reset=True)),
@@ -198,6 +198,13 @@ while True:
         process = process.strip().center(PROCESS_WIDTH)
         linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), process, format(reset=True)))
 
+    # write out tagtype colored edge
+    if not priority in PRIORITIES:
+        print line
+        continue
+
+    linebuf.write(PRIORITIES[priority])
+
     # right-align tag title and allocate color if needed
     tag = tag.strip()
     if "avc: denied" in message:
@@ -210,13 +217,6 @@ while True:
         color = allocate_color(tag)
         tag = tag[-line_tag_width:].rjust(line_tag_width)
         linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
-
-    # write out tagtype colored edge
-    if not priority in PRIORITIES:
-        print line
-        continue
-
-    linebuf.write(PRIORITIES[priority])
 
     # color any high-millis operations
     message = retime.sub(millis_color, message)
