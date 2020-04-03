@@ -35,12 +35,14 @@ IGNORED = [
 ]
 
 # Width of various columns; set to -1 to hide
-USER_WIDTH = 3
-PROCESS_WIDTH = 8
+TIME_WIDTH = 18 
+PPID_WIDTH = 7
+USER_WIDTH = 0
+PROCESS_WIDTH = 7
 TAG_WIDTH = 20
 PRIORITY_WIDTH = 3
 
-HEADER_SIZE = USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 4
+HEADER_SIZE = TIME_WIDTH + PPID_WIDTH + USER_WIDTH + PROCESS_WIDTH + TAG_WIDTH + PRIORITY_WIDTH + 6
 
 # unpack the current terminal width/height
 data = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, '1234')
@@ -76,7 +78,7 @@ def indent_wrap(message, indent=0, width=80):
     return messagebuf.getvalue()
 
 USER_COLORS = [BLUE,YELLOW,RED,GREEN,MAGENTA,CYAN]
-LAST_USED = [RED,GREEN,YELLOW,BLUE,MAGENTA,CYAN,WHITE]
+LAST_USED = [RED,GREEN,YELLOW,MAGENTA,CYAN,WHITE]
 KNOWN_TAGS = {
     "dalvikvm": BLUE,
     "art": BLUE,
@@ -103,7 +105,7 @@ def allocate_color(tag):
     return color
 
 PRIORITIES = {
-    "V": "%s%s%s " % (format(fg=WHITE, bg=BLACK), "V".center(PRIORITY_WIDTH), format(reset=True)),
+    "V": "%s%s%s " % (format(fg=BLACK, bg=WHITE), "V".center(PRIORITY_WIDTH), format(reset=True)),
     "D": "%s%s%s " % (format(fg=BLACK, bg=BLUE), "D".center(PRIORITY_WIDTH), format(reset=True)),
     "I": "%s%s%s " % (format(fg=BLACK, bg=GREEN), "I".center(PRIORITY_WIDTH), format(reset=True)),
     "W": "%s%s%s " % (format(fg=BLACK, bg=YELLOW), "W".center(PRIORITY_WIDTH), format(reset=True)),
@@ -111,6 +113,7 @@ PRIORITIES = {
     "F": "%s%s%s " % (format(fg=BLACK, bg=RED), "F".center(PRIORITY_WIDTH), format(reset=True)),
 }
 
+redetail = re.compile("^([0-9]+-[0-9]+ [0-9\:\.]+)\s+([0-9]+)\s+([0-9]+) ([\sVDIWEF\s]) ([\S]*)\s*\: (.*)$")
 retag = re.compile("^([A-Z])/([^\(]+)\(([^\)]+)\): (.*)$")
 retime = re.compile("(?:(\d+)s)?([\d.]+)\dms")
 reproc = re.compile(r"^I/ActivityManager.*?: Start proc .*?: pid=(\d+) uid=(\d+)")
@@ -135,11 +138,14 @@ adb_args = ' '.join(sys.argv[1:])
 
 # if someone is piping in to us, use stdin as input.  if not, invoke adb logcat
 if os.isatty(sys.stdin.fileno()):
-    input = os.popen("adb %s logcat -v brief" % adb_args)
+    input = os.popen("adb %s logcat" % adb_args)
 else:
     input = sys.stdin
 
 while True:
+    line_header_size = HEADER_SIZE
+    line_tag_width = TAG_WIDTH
+
     try:
         line = input.readline()
     except KeyboardInterrupt:
@@ -153,16 +159,23 @@ while True:
     if match:
         KNOWN_PIDS[int(match.group(1))] = int(match.group(2))
 
-    match = retag.match(line)
+    match = redetail.match(line)
     if not match:
         print line
         continue
 
-    priority, tag, process, message = match.groups()
+    time, ppid, process, priority, tag, message = match.groups()
+    if (len(tag) > line_tag_width):
+        line_tag_width = len(tag)
+        line_header_size = TIME_WIDTH + PPID_WIDTH + USER_WIDTH + PROCESS_WIDTH + line_tag_width + PRIORITY_WIDTH + 6
     linebuf = StringIO.StringIO()
 
     tag = tag.strip()
     if tag in IGNORED: continue
+
+    # time
+    if TIME_WIDTH > 0:
+        linebuf.write("%s%s%s " % (format(fg=GREEN, bg=BLACK, bright=False), time, format(reset=True)))
 
     # center user info
     if USER_WIDTH > 0:
@@ -175,23 +188,15 @@ while True:
         else:
             linebuf.write(" " * (USER_WIDTH + 1))
 
+    # ppid
+    if PPID_WIDTH > 0:
+        ppid = ppid.strip().center(PPID_WIDTH)
+        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), ppid, format(reset=True)))
+
     # center process info
     if PROCESS_WIDTH > 0:
         process = process.strip().center(PROCESS_WIDTH)
         linebuf.write("%s%s%s " % (format(fg=BLACK, bg=BLACK, bright=True), process, format(reset=True)))
-
-    # right-align tag title and allocate color if needed
-    tag = tag.strip()
-    if "avc: denied" in message:
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s%s " % (format(fg=WHITE, bg=RED, dim=False), tag, format(reset=True)))
-    elif tag in HIGHLIGHT:
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
-    else:
-        color = allocate_color(tag)
-        tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
 
     # write out tagtype colored edge
     if not priority in PRIORITIES:
@@ -200,11 +205,24 @@ while True:
 
     linebuf.write(PRIORITIES[priority])
 
+    # right-align tag title and allocate color if needed
+    tag = tag.strip()
+    if "avc: denied" in message:
+        tag = tag[-line_tag_width:].rjust(line_tag_width)
+        linebuf.write("%s%s%s " % (format(fg=WHITE, bg=RED, dim=False), tag, format(reset=True)))
+    elif tag in HIGHLIGHT:
+        tag = tag[-line_tag_width:].rjust(line_tag_width)
+        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
+    else:
+        color = allocate_color(tag)
+        tag = tag[-line_tag_width:].rjust(line_tag_width)
+        linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
+
     # color any high-millis operations
     message = retime.sub(millis_color, message)
 
     # insert line wrapping as needed
-    message = indent_wrap(message, HEADER_SIZE, WIDTH)
+    message = indent_wrap(message, line_header_size, WIDTH)
 
     linebuf.write(message)
     print linebuf.getvalue()
