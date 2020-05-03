@@ -171,7 +171,7 @@ while True:
             user = get_user_id(KNOWN_PIDS[pid])
             color = USER_COLORS[user % len(USER_COLORS)]
             user = str(user).center(USER_WIDTH)
-            linebuf.write("%s%s%s " % (format(fg=BLACK, bg=color, bright=False), user, format(reset=True)))
+            linebuf.write("%s%s%s " % (format(fg=BLACK, bg=color, bright=true), user, format(reset=True)))
         else:
             linebuf.write(" " * (USER_WIDTH + 1))
 
@@ -184,14 +184,14 @@ while True:
     tag = tag.strip()
     if "avc: denied" in message:
         tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s%s " % (format(fg=WHITE, bg=RED, dim=False), tag, format(reset=True)))
+        linebuf.write("%s%s%s " % (format(fg=WHITE, bg=RED, dim=true), tag, format(reset=True)))
     elif tag in HIGHLIGHT:
         tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=False), tag, format(reset=True)))
+        linebuf.write("%s%s%s " % (format(fg=BLACK, bg=WHITE, dim=trur), tag, format(reset=True)))
     else:
         color = allocate_color(tag)
         tag = tag[-TAG_WIDTH:].rjust(TAG_WIDTH)
-        linebuf.write("%s%s%s " % (format(fg=color, dim=False), tag, format(reset=True)))
+        linebuf.write("%s%s%s " % (format(fg=color, dim=true), tag, format(reset=True)))
 
     # write out tagtype colored edge
     if not priority in PRIORITIES:
