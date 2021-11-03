@@ -142,6 +142,8 @@ else:
 while True:
     try:
         line = input.readline()
+    except UnicodeDecodeError:
+        pass
     except KeyboardInterrupt:
         break
 
